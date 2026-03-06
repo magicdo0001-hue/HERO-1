@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bambino Ultra | Physical Gallery Experience</title>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Great+Vibes&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* 物理交互核心：自定义贝塞尔曲线 (强弹簧回弹) */
+            --spring-easing: cubic-bezier(0.68, -0.6, 0.27, 1.55); 
+            
+            --milky-bg: rgba(248, 249, 250, 0.7); 
+            --glass-bg: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --font-cursive: 'Great Vibes', cursive;
+            --font-handwritten: 'Caveat', cursive;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
+
+        body {
+            font-family: var(--font-handwritten);
+            height: 100vh;
+            overflow: hidden; /* 外部禁用滚动 */
+            display: flex;
+            justify-content: center;
+            align-items: center; /* 中央对齐卡片 */
+            background: linear-gradient(135deg, #e0e5ec 0%, #a0a5b0 100%);
+        }
+
+        /* --- 1. 模糊乳白色背景层 (保留) --- */
+        .milky-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: var(--milky-bg);
+            backdrop-filter: blur(35px) saturate(140%);
+            -webkit-backdrop-filter: blur(35px) saturate(140%);
+            z-index: -1;
+        }
+
+        /* --- 2. 自定义鼠标跟随器 (阻尼感保留) --- */
+        .mouse-follower {
+            position: fixed;
+            width: 35px;
+            height: 35px;
+            background-color: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+            /* 物理跟随通过 JS 实现 */
+        }
+
+        /* --- 3. 中央主交互卡片 (延伸主体) --- */
+        .experience-card {
+            width: 90%;
+            max-width: 1100px;
+            height: 600px; /* 初始 Hero 高度 */
+            background: var(--glass-bg);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid var(--glass-border);
+            border-radius: 45px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.1), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            
+            /* 关键：应用物理延伸动画 */
+            transition: height 0.9s var(--spring-easing), width 0.9s var(--spring-easing), border-radius 0.9s var(--spring-easing);
+            
+            overflow: hidden; /* 内容在外部不溢出 */
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 卡片物理延伸后的状态 */
+        .experience-card.expanded {
+            height: 95vh; /* 延伸至视口高度的 95% */
+            width: 95%; /* 稍微加宽，增加空间感 */
+            border-radius: 30px; /* 边缘变得稍锐利 */
+        }
+
+        /* --- 4. 卡片内部滚动包装器 --- */
+        .card-content-wrapper {
+            flex: 1;
+            width: 100%;
+            overflow-y: auto; /* 在卡片内部允许滚动 */
+            display: flex;
+            flex-direction: column;
+            scroll-behavior: smooth;
+        }
+        /* 隐藏卡片内部滚动条 */
+        .card-content-wrapper::-webkit-scrollbar { display: none; }
+
+        /* --- 5. Hero Section (固定部分) --- */
+        .hero-section {
+            height: 600px; /* 与初始卡片高度一致 */
+            flex: 0 0 600px; /* 不随卡片延伸而拉伸 */
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 0 80px;
+            width: 100%;
+        }
+
+        .text-area { max-width: 420px; }
+        
+        /* 液态金属文字适配浅色 */
+        .liquid-title {
+            font-family: var(--font-cursive);
+            font-size: 5.8rem;
+            line-height: 1.1;
+            margin-bottom: 15px;
+            background: linear-gradient(90deg, #3a4149, #ffffff, #3a4149);
+            background-size: 200%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: flow Shine 4s infinite linear;
+            filter: drop-shadow(0px 2px 8px rgba(0,0,0,0.1));
+        }
+        @keyframes flowShine { to { background-position: 200%; } }
+
+        /* 弹簧交互按钮 */
+        .btn-physical {
+            font-family: var(--font-handwritten);
+            font-size: 1.7rem;
+            font-weight: 700;
+            padding: 14px 38px;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(135deg, #fff, #e0e5ec);
+            color: #0f1115;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+            transition: all 0.6s var(--spring-easing); /* 弹簧阻尼 Hover */
+            margin-top: 30px;
+        }
+        .btn-physical:hover { transform: translateY(-6px) scale(1.04); box-shadow: 0 18px 35px rgba(0,0,0,0.12); }
+
+        /* 主图 3D 舞台 */
+        .main-stage { perspective: 1200px; display: flex; justify-content: center; }
+        #mainProductImg {
+            width: 500px;
+            filter: drop-shadow(0 30px 50px rgba(0,0,0,0.15));
+            transition: transform 0.1s ease-out; /* JS 阻尼回弹 */
+            transform-style: preserve-3d;
+        }
+
+        /* --- 6. 多角度画廊区域 (延伸后显示) --- */
+        .angles-gallery {
+            width: 100%;
+            padding: 80px;
+            background: rgba(255, 255, 255, 0.03);
+            border-top: 1px solid var(--glass-border);
+            opacity: 0;
+            transform: translateY(50px);
+            transition: all 0.6s ease 0.4s; /* 延迟显示 */
+            text-align: center;
+        }
+        .experience-card.expanded .angles-gallery {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .thumb-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 30px;
+            margin-top: 50px;
+            padding-bottom: 60px; /* 增加底部间距 */
+        }
+
+        .thumb-item {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid var(--glass-border);
+            border-radius: 30px;
+            padding: 30px;
+            transition: all 0.5s var(--spring-easing);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .thumb-item img { width: 100%; object-fit: contain; filter: drop-shadow(0 5px 15px rgba(0,0,0,0.1)); transition: 0.3s;}
+        .thumb-item span { margin-top: 15px; font-weight: bold; color: #333; font-size: 1.2rem;}
+        
+        .thumb-item:hover {
+            transform: scale(1.08) translateY(-10px);
+            background: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="milky-overlay"></div>
+
+    <div class="mouse-follower" id="mouseFollower"></div>
+
+    <div class="experience-card" id="experienceCard">
+        
+        <div class="card-content-wrapper" id="cardContent">
+            
+            <header class="hero-section">
+                <div class="text-area">
+                    <h1 class="liquid-title">Breville</h1>
+                    <p style="font-size: 1.9rem; color: #444;">Bambino Ultra: Precision in liquid silver.</p>
+                    <button class="btn-physical" id="toggleBtn">Watch Different Angles</button>
+                </div>
+                <div class="main-stage" id="imgStage">
+                    <img src="斜角.jpg" alt="Main View" id="mainProductImg">
+                </div>
+            </header>
+
+            <section class="angles-gallery">
+                <h2 style="font-size: 3.5rem; font-family: var(--font-cursive); color: #222;">Selection of Perspectives</h2>
+                <p style="font-size: 1.4rem; color: #555; margin-top: -10px;">Select an angle to examine the Liquid Metal details.</p>
+                <div class="thumb-grid">
+                    <div class="thumb-item" data-src="斜角.jpg">
+                        <img src="斜角.jpg">
+                        <span>Isometric</span>
+                    </div>
+                    <div class="thumb-item" data-src="斜角.jpg">
+                        <img src="斜角.jpg">
+                        <span>Front View</span>
+                    </div>
+                    <div class="thumb-item" data-src="斜角.jpg">
+                        <img src="斜角.jpg">
+                        <span>Details Macro</span>
+                    </div>
+                    <div class="thumb-item" data-src="斜角.jpg">
+                        <img src="斜角.jpg">
+                        <span>Side View</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const card = document.getElementById('experienceCard');
+        const cardContent = document.getElementById('cardContent');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const mainStage = document.getElementById('imgStage');
+        const mainImg = document.getElementById('mainProductImg');
+        const follower = document.getElementById('mouseFollower');
+
+        // --- 1. 物理延伸交互 (核心保留) ---
+        toggleBtn.addEventListener('click', () => {
+            card.classList.toggle('expanded');
+            
+            if (card.classList.contains('expanded')) {
+                toggleBtn.textContent = 'Return Top';
+            } else {
+                toggleBtn.textContent = 'Watch Different Angles';
+                // 收起时，重置卡片内部滚动位置到顶部
+                cardContent.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        });
+
+        // --- 2. 卡片内边缘感知滚动 (升级逻辑) ---
+        let currentScrollTop = 0;
+        cardContent.addEventListener('scroll', () => {
+            currentScrollTop = cardContent.scrollTop; // 记录当前滚动位置
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!card.classList.contains('expanded')) return;
+
+            const threshold = 130; // 底部触发区域高度
+            const windowHeight = window.innerHeight;
+            
+            // 只有当鼠标移入全屏底部的触发区时，才触发卡片内部滚动
+            if (e.clientY > windowHeight - threshold) {
+                // 触发滚动
+                cardContent.scrollBy(0, 15); // 向下平滑滚动卡片内部内容
+                follower.style.transform = 'translate(-50%, -50%) scale(1.6) rotate(90deg)';
+                follower.style.background = 'rgba(255,255,255,0.4)';
+            } else {
+                follower.style.transform = 'translate(-50%, -50%) scale(1)';
+                follower.style.background = 'rgba(255,255,255,0.6)';
+            }
+        });
+
+        // --- 3. 自定义鼠标阻尼跟随 (保留) ---
+        let mouseX = 0, mouseY = 0; 
+        let followerX = 0, followerY = 0; 
+
+        window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+
+        function animateFollower() {
+            const friction = 0.16; 
+            followerX += (mouseX - followerX) * friction;
+            followerY += (mouseY - followerY) * friction;
+            follower.style.left = followerX + 'px';
+            follower.style.top = followerY + 'px';
+            requestAnimationFrame(animateFollower); 
+        }
+        animateFollower(); 
+
+        // --- 4. 主图 3D 阻尼跟随 (保留) ---
+        mainStage.addEventListener('mousemove', (e) => {
+            const rect = mainStage.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width - 0.5;
+            const y = (e.clientY - rect.top) / rect.height - 0.5;
+            mainImg.style.transform = `rotateX(${-y * 22}deg) rotateY(${x * 22}deg) scale(1.03)`;
+        });
+        mainStage.addEventListener('mouseleave', () => {
+            mainImg.style.transform = `rotateX(0deg) rotateY(0deg) scale(1)`;
+        });
+
+    </script>
+</body>
+</html>
